@@ -77,9 +77,9 @@ class ActiveRecordSelectTest extends UnitTestCase {
             ->child('Cases', 'Id, Reason')
             ->like('Name', 'G%')
             ->select('Id, Name');
-        print("<pre>");
-        var_dump($result);
-        print("</pre>");
+        //print("<pre>");
+        //var_dump($result);
+        //print("</pre>");
         //SELECT Account.Id, Account.Name, Account.Owner.Id, Account.Owner.Username, Account.CreatedBy.Username, (SELECT Id, name FROM Contacts), (SELECT Id, reason FROM Cases) FROM Account WHERE Name LIKE 'G%'";
         
         $this->assertEqual(count($result), 3);
@@ -100,6 +100,40 @@ class ActiveRecordSelectTest extends UnitTestCase {
             $this->fail($e->getTraceAsString());
         }
         
+    }
+    
+    public function testNestedParent() {
+        $case = new Sobject_Case();
+        //$case->dryrun(true);
+        $result = $case
+            ->join('Contact', 'LastName, FirstName')
+            ->join('Contact.Account', 'Name')
+            ->starts('Contact.Account.Name', 'G')
+            ->order('CaseNumber')
+            ->select('CaseNumber, Subject');
+        //$expected = "SELECT Case.CaseNumber, Case.Subject, Case.Contact.LastName, Case.Contact.FirstName, Case.Contact.Account.Name FROM Case WHERE (Contact.Account.Name LIKE 'G%') ORDER BY CaseNumber";
+        //$this->assertEqual(trim($result), $expected); 
+        $this->assertEqual(count($result), 6);
+        $this->assertEqual('00001006', $result[0]->CaseNumber);
+        $this->assertEqual('Frank', $result[0]->Contact->LastName);
+        $this->assertEqual('GenePoint', $result[0]->Contact->Account->Name);
+    }
+    
+    public function testNestedParentAllColumn() {
+        $case = new Sobject_Case();
+        //$case->dryrun(true);
+        $result = $case
+            ->join('Contact')
+            ->join('Contact.Account')
+            ->starts('Contact.Account.Name', 'G')
+            ->order('CaseNumber')
+            ->select();
+        //$expected = "SELECT Case.CaseNumber, Case.Subject, Case.Contact.LastName, Case.Contact.FirstName, Case.Contact.Account.Name FROM Case WHERE (Contact.Account.Name LIKE 'G%') ORDER BY CaseNumber";
+        //$this->assertEqual(trim($result), $expected); 
+        $this->assertEqual(count($result), 6);
+        $this->assertEqual('00001006', $result[0]->CaseNumber);
+        $this->assertEqual('Frank', $result[0]->Contact->LastName);
+        $this->assertEqual('GenePoint', $result[0]->Contact->Account->Name);
     }
     
 }

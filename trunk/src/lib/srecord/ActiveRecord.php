@@ -111,7 +111,6 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * TODO nest
      * set child-parent relationship
      * @param string $name relationship name
      * @param string $columns columns to select.(if null, all columns is selected.)   
@@ -120,10 +119,20 @@ class Srecord_ActiveRecord
     public function join($name, $columns=NULL)
     {
         $config = $this->__parentRelationships;
-        if (! is_array($config) || ! isset($config[$name])) {
+        $nest = explode('.', $name);
+        $lastname = array_pop($nest);
+        while ($n = array_shift($nest)) {
+            $obj = $config[$n];
+            $config = $this->_getEntityConfig("Sobjectdef_{$obj}", "_parentRelationships");
+            if (! is_array($config)) {
+                throw new Srecord_ActiveRecordException("parentRelationships not found.");
+            }
+        }
+        if (! isset($config[$lastname])) {
             throw new Srecord_ActiveRecordException("parentRelationships not found.");
         }
-        $this->_parents[$name] = $config[$name];
+        $this->_parents[$name] = $config[$lastname];
+        
         if ($columns != NULL) {
             $this->_selectColumns[$name] = $columns;
         }
@@ -1011,7 +1020,7 @@ class Srecord_ActiveRecord
             $buff[] = "{$base}.{$col}";
         }
         
-        // columns of parents TODO nest
+        // columns of parents
         if (count($this->_parents)) {
             foreach ($this->_parents as $name => $objname) {
                 $columns = $this->getSelectColumnsAsArray($name);
@@ -1142,19 +1151,22 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * TODO check object structure
      * set record value.
      * @param SObject $row
      */
     protected function _buildResultSet($row) {
         
-        $parentNames = array_keys($this->_parents);
+        $parentNames = array();
+        foreach ($this->_parents as $name => $val) {
+            if (strpos($name, '.') === FALSE) {
+                $parentNames[] = $name;
+            }
+        }
         
         // fields
         if (isset($row->Id)) {
-            $this->Id = $row->Id; //TODO test
+            $this->Id = $row->Id;
         }
-        $columns = $this->_getColumns(get_class($this));
         foreach (get_object_vars($row->fields) as $n => $v) {
             if (is_int($n) && is_object($v)) {
                 // parent
@@ -1366,6 +1378,14 @@ class Srecord_ActiveRecord
         }
         $objname = "Sobject_{$objname}";
         $obj = new $objname();
+        
+        foreach ($this->_parents as $name => $value) {
+            $len = strlen($relname);
+            if ($name != $relname && substr($name, 0, $len) == $relname) {
+                $cname = substr($name, $len+1);
+                $obj->join($cname, 'Id');
+            }
+        }
         return $obj; 
     }
     
