@@ -143,16 +143,50 @@ class Srecord_ActiveRecord
      * TODO child filter
      * set parent-child relationship
      * @param string $name relationship name
-     * @param string $columns columns to select.(if null, all columns is selected.)   
+     * @param string $columns columns to select.(if null, all columns is selected.)
+     * @param string $filter child filter clause. can use place holder '?'.
+     * @param mixed $bindvlaue bindvalue of filter.
      * @return Srecord_ActiveRecord
      */
-    public function child($name, $columns=NULL)
+    public function child()
     {
+        // manipulate args
+        $name = NULL;
+        $columns = NULL;
+        $filter = NULL;
+        $bindvalue = NULL;
+        
+        $args_num = func_num_args();
+        if ($args_num < 1) {
+            throw new SRecord_ActiveRecordException("args too short.");
+        }
+        $args_ar = func_get_args();
+        $name = array_shift($args_ar);
+        if ($args_num >= 2) {
+            $columns = array_shift($args_ar);
+        }
+        if ($args_num >= 3) {
+            $filter = array_shift($args_ar);
+        }
+        if ($args_num >= 4) {
+            $bindvalue = $args_ar;
+        }
+        
+        // filter
+        if ($filter != NULL) {
+            $filter = $this->_placeValue($filter, $bindvalue);
+        }
+
+        // set child relationship
         $config = $this->__childRelationships;
         if (! is_array($config) || ! isset($config[$name])) {
             throw new Srecord_ActiveRecordException("childRelationships not found.");
         }
-        $this->_children[$name] = $config[$name];
+        $this->_children[$name] = array(
+            'name' => $config[$name],
+            'filter' => $filter
+        );
+
         if ($columns != NULL) {
             $this->_selectColumns[$name] = $columns;
         }
@@ -1036,8 +1070,8 @@ class Srecord_ActiveRecord
         
         // columns of child
         if (count($this->_children)) {
-            foreach ($this->_children as $name => $objname) {
-                $childClause = $this->_buildChildSelectClause($name, $objname);
+            foreach ($this->_children as $name => $def) {
+                $childClause = $this->_buildChildSelectClause($name, $def);
                 $buff[] = $childClause;
             }
         }
@@ -1336,22 +1370,30 @@ class Srecord_ActiveRecord
     }
 
     /**
-     * TODO child filter
      * @param string $name
-     * @param string $objname
+     * @param array $def
      */
-    protected function _buildChildSelectClause($name, $objname) {
+    protected function _buildChildSelectClause($name, $def) {
         
+        $objname = $def['name'];
+        $filter = $def['filter'];
         $columns = $this->getSelectColumnsAsArray($name);
         if ($columns == NULL) {
             $columns = $this->_getColumns("Sobjectdef_{$objname}");
         }
-        $q = "(SELECT ". implode(", ", $columns);
-        $q .= " FROM {$name})";
-        
-        return $q;
+        $q = "SELECT ". implode(", ", $columns);
+        $q .= " FROM {$name}";
+        if ($filter) {
+            $q .= " WHERE {$filter}";
+        }
+        return "({$q})";
     }
     
+    /**
+     * TODO escape special character.
+     * @param unknown_type $query
+     * @param unknown_type $values
+     */
     protected function _placeValue($query, $values) {
         
         foreach ($values as $v) {
