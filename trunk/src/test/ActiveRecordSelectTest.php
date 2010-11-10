@@ -136,6 +136,19 @@ class ActiveRecordSelectTest extends UnitTestCase {
         $this->assertEqual('GenePoint', $result[0]->Contact->Account->Name);
     }
     
+    public function testChildFilter() {
+$expected = "SELECT Account.Id, Account.Name, (SELECT Id, reason FROM Cases WHERE reason = 'Feedback') FROM Account WHERE Name LIKE 'G%'";        
+        $account = new Sobject_Account();
+        $result = $account
+            ->child('Cases', 'Id, reason', 'reason = ?', 'Feedback')
+            ->starts('Name', 'G')
+            ->select('Id, Name');
+        $this->assertEqual(count($result), 3);
+        $this->assertEqual(count($result[0]->Cases), 2);
+        $this->assertEqual(count($result[1]->Cases), 1);
+        $this->assertEqual($result[0]->Cases[0]->Id, '500800000075hBuAAI');
+    }
+    
 }
 
 ?>
