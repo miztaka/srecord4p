@@ -149,6 +149,36 @@ $expected = "SELECT Account.Id, Account.Name, (SELECT Id, reason FROM Cases WHER
         $this->assertEqual($result[0]->Cases[0]->Id, '500800000075hBuAAI');
     }
     
+    public function testFind() {
+        $account = new Sobject_Account();
+        $account = $account->eq('Id', '0018000000UoDxpAAF')->find();
+        $this->assertEqual($account->Name, 'GenePoint');
+        try {
+            $account = $account->starts('Name', 'G')->find();
+        } catch (Exception $e) {
+            $this->assertTrue(TRUE, "OK");
+            return;
+        }
+        $this->fail('No Exception.');
+    }
+    
+    public function testCount() {
+       $case = new Sobject_Case();
+       $result = $case
+           ->join('Contact')
+           ->join('Contact.Account')
+           ->starts('Contact.Account.Name', 'G')
+           ->count();
+       $this->assertEqual($result, 6);
+
+       $result = $case->select();
+       $this->assertEqual(count($result), 6);
+    }
+    
+    public function testLimitOffset() {
+        
+    }
+    
 }
 
 ?>
