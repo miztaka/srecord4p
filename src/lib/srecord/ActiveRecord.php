@@ -564,93 +564,47 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * 単一行の検索を実行します。
+     * get one object.
+     * if too many rows are selected, throw exception.
      *
-     * @param mixed $id 配列で無い場合は、単一PKの値として扱います。配列の場合は、カラム名 => 値 のHashとして扱います。
-     * @return Teeple_ActiveRecord
+     * @param $columns string columns to select. concats with comma (ex. 'Name,Age,Address')
+     * @return Srecord_ActiveRecord
      */
-    public function find($id=null) {
+    public function find($columns=NULL) {
         
-        $this->_bindvalue = array();
-        
-        if ($id != null) {
-            if (! is_array($id)) {
-                if (count($this->_pk) != 1) {
-                    throw new TeepleActiveRecordException("pk is not single.");
-                }
-                $this->setConstraint($this->_pk[0], $id);
-            } else {
-                foreach($id as $col => $val) {
-                    $this->setConstraint($col, $val);
-                }
-            }
+        $result = $this->select($columns);
+        if (count($result) > 1) {
+            throw new Srecord_ActiveRecordException('too many rows.');
         }
-        
-        $sql = $this->_buildSelectSql();
-        $this->_log->debug("exec find: $sql");
-        $this->_log->debug("param is: \n".@var_export($this->_bindvalue,TRUE));
-        
-        $sth = $this->_pdo->prepare($sql);
-        if(! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
+        if (count($result) == 0) {
+            return NULL;
         }
-        if(! $sth->execute(@$this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
-        }
-        
-        $row_list = $sth->fetchAll(PDO::FETCH_ASSOC);
-        $this->_log->debug("exec select result: \n".@var_export($row_list, TRUE));
-        
-        if (count($row_list) > 1) {
-            throw new TeepleActiveRecordException("too many rows.");
-        }
-        if (count($row_list) == 0) {
-            return null;
-        }
-        
-        $item = clone($this);
-        $item->_buildResultSet($row_list[0]);
-        $item->resetInstance();
-        
-        $this->resetInstance();
-        return $item;
+        return $result[0];
     }
     
     /**
-     * 条件に該当するレコード数を取得します。
+     * get record count with results of count() query.
      * 
-     * @return int 該当件数
+     * @return int record count
      */
     public function count()
     {
         $this->_bindvalue = array();
         
-        $select_str = "SELECT COUNT(*)";
+        $select_str = "SELECT count()";
         $from_str = $this->_buildFromClause();
         $where_str = $this->_buildWhereClause();
         $other_str = $this->_buildAfterWhereClause();
         
         $sql = implode(" ", array($select_str,$from_str,$where_str,$other_str));
-        $this->_log->debug("exec count: $sql");
-        $this->_log->debug("param is: \n".@var_export($this->_bindvalue,TRUE));
-        
-        $sth = $this->_pdo->prepare($sql);
-        if(! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
-        }
-        if(! $sth->execute(@$this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
+        if ($this->dryrun()) {
+            return $sql;
         }
         
-        $count = $sth->fetchColumn();
-        $this->_log->debug("count result: $count");
-        
-        //$this->resetInstance();
-        return $count;
+        // connect to salesforce
+        $client = Srecord_Schema::getClient();
+        $res = @$client->query($sql); // E_Notice
+        return $res->size;
     }
 
     /**
