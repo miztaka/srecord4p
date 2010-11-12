@@ -51,12 +51,40 @@ class Srecord_Generator {
         
         // generate class file
         foreach($objectDefs as $def) {
+            $this->manipMeta($def);
             $this->generate($def);
         }
     }
+    
+    private function manipMeta($metaObj)
+    {
+        if (isset($metaObj->childRelationships)) {
+            if (! is_array($metaObj->childRelationships)) {
+                $metaObj->childRelationships = array($metaObj->childRelationships);
+            }
+            $childs = array();
+            foreach ($metaObj->childRelationships as $one) {
+                if (isset($one->relationshipName)) {
+                    $childs[$one->relationshipName] = $one;
+                }
+            }
+            $metaObj->childRelationships = $childs;
+        }
+        if (isset($metaObj->fields)) {
+            if (! is_array($metaObj->fields)) {
+                $metaObj->fields = array($metaObj->fields);
+            }
+            $fields = array();
+            foreach ($metaObj->fields as $one) {
+                $fields[$one->name] = $one;
+            }
+            $metaObj->fields = $fields;
+        }
+        return;
+    }
 
-    private function generate($def) {
-        
+    private function generate($def)
+    {
         $outputdir = dirname(dirname(__FILE__));
 
         // create directory
@@ -84,9 +112,6 @@ class Srecord_Generator {
         $childRelationPropStr = '';
         $childRelationships = array();
         if (isset($def->childRelationships)) {
-            if (! is_array($def->childRelationships)) {
-                $def->childRelationships = array($def->childRelationships);
-            }
             foreach ($def->childRelationships as $childdef) {
                 if (isset($childdef->relationshipName)) {
                     $childRelationships[$childdef->relationshipName] = $childdef;
@@ -101,9 +126,6 @@ class Srecord_Generator {
         $parentRelationships = array();
         $coldef = "";
         $joindef = "";
-        if (! is_array($def->fields)) {
-            $def->fields = array($def->fields);
-        }
         foreach($def->fields as $f) {
             
             $coldef .= "    public \$".$f->name."; //".$f->label."\n";
@@ -204,16 +226,8 @@ class {$classname} extends {$baseclassname}
      * @return {$classname}
      */
     public static function get() {
-        return Teeple_Container::getInstance()->getEntity('{$classname}');
-    }
-    
-    /**
-     * find by key
-     * @param \$id
-     * @return {$classname}
-     */
-    public function find(\$id=null) {
-        return parent::find(\$id);
+        \$obj = new {$classname}();
+        return \$obj;
     }
     
 }
