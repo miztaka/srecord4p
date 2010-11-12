@@ -73,7 +73,8 @@ class Srecord_ActiveRecord
     protected $_bindvalue = array();
     protected $_afterwhere = array();
     protected $_selectColumns = array();
-
+    protected $_fieldsToNull = array();
+    
     /**
      * constructor
      */
@@ -85,6 +86,28 @@ class Srecord_ActiveRecord
         return;
     }
     
+    /**
+     * get errors object of last insert, update..
+     */
+    public function getErrors() {
+        return $this->_errors;
+    }
+    protected $_errors;
+    
+    /**
+     * get metadata of SObject
+     */
+    public function getMeta()
+    {
+        $meta = $this->_getEntityConfig(get_class($this), '__meta');
+        if (! is_object($meta)) {
+            $metaObj = unserialize(base64_decode($meta));
+            $this->_setEntityConfig(get_class($this), '__meta', $metaObj);
+            return $metaObj;
+        }
+        return $meta;
+    }
+
     /**
      * set dryrun flag.
      * @param boolean $bool
@@ -608,152 +631,117 @@ class Srecord_ActiveRecord
     }
 
     /**
-     * レコードを登録します。
+     * insert one record.
+     * if you want to insert multiple records, use Srecord_Schema::createAll() instead.
+     * Id is set if success.
+     * you can get errors with getError() when error occurs.
      * 
-     * <pre>
-     * constraintとrowに設定されている値で、レコードを１つ作成します。
-     * PKが単一カラムで、$_auto がTRUEに設定されている場合で、INSERT値にPKが設定されていなかった場合は、
-     * INSERT後、インスタンスにPK値をセットします。
-     * </pre>
-     * 
-     * @return bool 登録できたかどうか。
+     * @return bool or returns SObject if dryrun
      */
     public function insert()
     {
-        if (function_exists('teeple_activerecord_before_insert')) {
-            teeple_activerecord_before_insert($this);
+        if (function_exists('srecord_activerecord_before_insert')) {
+            srecord_activerecord_before_insert($this);
         }
 
-        $this->_bindvalue = array();
-        $row = $this->_convertObject2Array($this, true);
-        $this->_log->info("insert ". $this->_tablename. ": \n".@var_export($row,TRUE));
-        
-        $binding_params = $this->_makeBindingParams($row);
-        $sql = "INSERT INTO `". $this->_tablename ."` (" .
-            implode(', ', array_keys($row)) . ') VALUES(' .
-            implode(', ', array_keys($binding_params)) . ');';
-
-        $this->_log->debug("sql: $sql");
-        $sth = $this->_pdo->prepare($sql);
-        if(! $sth) { 
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
-        }
-
-        if(! $sth->execute($binding_params)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
-        }
-
-        if (count($this->_pk) == 1 && $this->_auto && (! isset($this->{$this->_pk[0]}) || $this->{$this->_pk[0]} == "")) {
-            $this->{$this->_pk[0]} = $this->_pdo->lastInsertId();
-            $this->_log->info("AUTO: ". $this->_pk[0] ." = {$this->{$this->_pk[0]}}");
+        $so = $this->_convert2SObject();
+        if ($this->dryrun()) {
+            return $so;
         }
         
-        $this->_log->info("insert ". $this->_tablename .": result=(".$sth->rowCount().")");
+        // connect to salesforce.
+        $client = Srecord_Schema::getClient();
+        $res = $client->create(array($so));
+        if ($res->success) {
+            $this->Id = $res->id;
+            return TRUE;
+        }
         
-        $this->resetInstance();
-        return $sth->rowCount() > 0;
+        // error.
+        $this->_errors = $res->errors;
+        return FALSE;
     }
     
     /**
-     * レコードの更新を実行します。
-     * 
-     * <pre>
-     * rowにセットされているPKで更新を行ないます。
-     * </pre>
-     * 
-     * @return int 変更のあったレコード数
+     * set fieldsToNull
+     * @param mixed $fields array or field names separated by comma 
      */
-    public function update()
+    public function fieldnull($fields)
     {
-        if (function_exists('teeple_activerecord_before_update')) {
-            teeple_activerecord_before_update($this);
+        if (! is_array($fields)) {
+            $fields = explode(',', $fields);
         }
-        $this->_bindvalue = array();
-        if (! $this->isSetPk()) {
-            throw new TeepleActiveRecordException("primary key not set.");
+        foreach ($fields as $f) {
+            if ($this->isUpdatableField($f)) {
+                $this->_fieldsToNull[] = trim($f);
+            }
         }
-        
-        $values = $this->_convertObject2Array($this, false);
-        $this->_log->info("update ". $this->_tablename .": \n".@var_export($values,TRUE));
-        $pks = array();
-        // primary key は 更新しない。
-        foreach ($this->_pk as $pk) {
-            unset($values[$pk]);
-            $this->setConstraint($pk, $this->$pk);
-        }
-        if (! count($values)) {
-            throw new TeepleActiveRecordException("no columns to update.");
-        }
-
-        $sql = "UPDATE `". $this->_tablename ."` ".
-            $this->_buildSetClause($values).
-            " ". $this->_buildConstraintClause(false);
-        
-        $this->_log->debug("update ". $this->_tablename .": {$sql}");
-        $this->_log->debug(@var_export($this->_bindvalue,TRUE));
-        
-        $sth = $this->_pdo->prepare($sql);
-        if (! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
-        }
-        if (! $sth->execute($this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
-        }
-        
-        $this->_log->info("update ". $this->_tablename .": result=(".$sth->rowCount().")");
-        
-        if ($sth->rowCount() != 1) {
-            throw new TeepleActiveRecordException('更新に失敗しました。他の処理と重なった可能性があります。');
-        }
-        
-        $this->resetInstance();
-        return $sth->rowCount();
+        return $this;
     }
     
     /**
-     * 条件に該当するレコードを全て更新します。
-     * 
-     * <pre>
-     * セットされているconstraints及びcriteriaに
-     * 該当するレコードを全て更新します。
-     * </pre>
-     * 
-     * @return int 更新件数
+     * update record by id.
+     * empty fields are ignored.
+     * set $fieldsToNull if you want set NULL to some fields.
+     *
+     * @param array $fieldsToNull fields names to set NULL.
+     * @return bool
      */
-    public function updateAll()
+    public function update($fieldsToNull=NULL)
     {
-        if (function_exists('teeple_activerecord_before_updateAll')) {
-            teeple_activerecord_before_updateAll($this);
+        if (function_exists('srecord_activerecord_before_update')) {
+            srecord_activerecord_before_update($this);
         }
-         
-        $this->_bindvalue = array();
-        
-        $row = $this->_convertObject2Array($this, true);
-        $sql = "UPDATE `". $this->_tablename ."` ".
-            $this->_buildSetClause($row).
-            " ". $this->_buildWhereClause(false);
-        
-        $this->_log->info("updateAll ". $this->_tablename .": $sql");
-        $this->_log->info("param is: \n". @var_export($this->_bindvalue, TRUE));
-        $sth = $this->_pdo->prepare($sql);
-        
-        if (! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
-        }
-        if (! $sth->execute($this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
+
+        if ($this->Id === NULL || ! strlen($this->Id)) {
+            throw new TeepleActiveRecordException("id not set.");
         }
         
-        $this->_log->info("updateAll ". $this->_tablename .": result=(".$sth->rowCount().")");
+        if (is_array($fieldsToNull)) {
+            foreach ($fieldsToNull as $one) {
+                if ($this->isUpdatableField($one)) {
+                    $this->_fieldsToNull[] = $one;
+                }
+            }
+        }
         
-        $this->resetInstance();
-        return $sth->rowCount();        
+        $so = $this->_convert2SObject();
+        if (count($this->_fieldsToNull) > 0) {
+            $so->fieldsToNull = array_unique($this->_fieldsToNull);
+        }
+        foreach ($so->fields as $n => $v) {
+            if (! $this->isUpdatableField($n)) {
+                unset($so->fields[$n]);
+            }
+        }
+        
+        // connect to salesforce.
+        $client = Srecord_Schema::getClient();
+        $res = $client->update(array($so));
+        if ($res->success == 1) {
+            return TRUE;
+        }
+        
+        // error.
+        $this->_errors = $res->errors;
+        return FALSE;
+    }
+    
+    /**
+     * update record by id.
+     * empty fields are set to NULL.
+     *
+     * @param array $fieldsToNull fields names to set NULL.
+     * @return bool
+     */
+    public function updateEntity()
+    {
+        foreach ($this->_getColumns(get_class($this)) as $col) {
+            if ($this->_null($this->$col) === NULL && $this->isUpdatableField($col)) {
+                $this->_fieldsToNull[] = $col;
+            }
+        }
+        return $this->update();
     }
     
     /**
@@ -919,6 +907,7 @@ class Srecord_ActiveRecord
         $this->_bindvalue = array();
         $this->_afterwhere = array();
         $this->_selectColumns = array();
+        $this->_fieldsToNull = array();
         return;
     }
     
@@ -1192,10 +1181,16 @@ class Srecord_ActiveRecord
         }
     }
     
-    protected function _getEntityConfig($clsname, $property) {
-        
+    protected function _getEntityConfig($clsname, $property)
+    {
         $ref = new ReflectionClass($clsname);
         return $ref->getStaticPropertyValue($property);
+    }
+    
+    protected function _setEntityConfig($clsname, $property, $value)
+    {
+        $ref = new ReflectionClass($clsname);
+        $ref->setStaticPropertyValue($property, $value);
     }
 
     /**
@@ -1287,6 +1282,21 @@ class Srecord_ActiveRecord
         }
 
         return $result;
+    }
+    
+    protected function _convert2SObject($excludeNull=TRUE, $obj=NULL) {
+        if ($obj == NULL) {
+            $obj = $this;
+        }
+        $fields = $this->_convertObject2Array($obj, $excludeNull);
+        $so = new SObject();
+        $so->type = $obj->__soname;
+        if (isset($fields['Id'])) {
+            $so->Id = $fields['Id'];
+            unset($fields['Id']);
+        }
+        $so->fields = $fields;
+        return $so;
     }
     
     /**
@@ -1391,6 +1401,16 @@ class Srecord_ActiveRecord
         $objname = "Sobject_{$objname}";
         $obj = new $objname();
         return $obj;
+    }
+    
+    protected function isUpdatableField($f)
+    {
+        return $this->getMeta()->fields[$f]->updateable == 1;
+    }
+    
+    protected function isCreatableField($f)
+    {
+        return $this->getMeta()->fields[$f]->createable == 1;
     }
 
 }
