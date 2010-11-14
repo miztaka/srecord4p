@@ -745,162 +745,73 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * 指定されたレコードを削除します。 
+     * update or insert one record.
+     * if you want to upsert multiple records, use Srecord_Schema::upsertAll() instead.
+     * Id is set if success.
+     * you can get errors with getError() when error occurs.
      * 
-     * <pre>
-     * constraintまたは $idパラメータで指定されたPKに該当するレコードを削除します。
-     * $id がハッシュでないときは、id列の値とみなしてDELETEします。
-     * $id がハッシュのときは、key値をPKのカラム名とみなしてDELETEします。
-     * </pre>
-     * 
-     * @param mixed $id PKの値
-     * @return bool 実行結果
-     */
-    public function delete($id = null)
+     * @param string $externalIDFieldName
+     * @return bool
+     */    
+    public function upsert($externalIDFieldName)
     {
-        $this->_bindvalue = array();
+        if (function_exists('srecord_activerecord_before_upsert')) {
+            srecord_activerecord_before_upsert($this);
+        }
         
-        // rowにセットされているPKがあればconstraintに
-        foreach ($this->_pk as $pk) {
-            if (isset($this->$pk) && $this->getConstraint($pk) == "") {
-                $this->setConstraint($pk, $this->$pk);
+        $so = $this->_convert2SObject();
+        if (count($this->_fieldsToNull) > 0) {
+            $so->fieldsToNull = array_unique($this->_fieldsToNull);
+        }
+        
+        // connect to salesforce.
+        $client = Srecord_Schema::getClient();
+        $res = $client->upsert($externalIDFieldName, array($so));
+        if ($res->success == 1) {
+            if (isset($res->id)) {
+                $this->Id = $res->id;
             }
+            return TRUE;
         }
         
-        if ($id != null) {
-            if (! is_array($id)) {
-                if (count($this->_pk) != 1) {
-                    throw new TeepleActiveRecordException("pk is not single.");
-                }
-                $this->setConstraint($this->_pk[0], $id);
-            } else {
-                foreach($id as $col => $val) {
-                    $this->setConstraint($col, $val);
-                }
-            }
-        }
-        
-        $sql = "DELETE FROM `". $this->_tablename ."` ".
-            $this->_buildConstraintClause(false);
-
-        $this->_log->info("delete ". $this->_tablename .": $sql");
-        $this->_log->debug("param is: \n". @var_export($this->_bindvalue, TRUE));
-        
-        $sth = $this->_pdo->prepare($sql);
-        if (! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
-        }
-        if (! $sth->execute($this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
-        }
-        
-        $this->_log->info("delete ". $this->_tablename .": result=(".$sth->rowCount().")");
-
-        $props = array_keys(get_class_vars(get_class($this)));
-        foreach ($props as $key) {
-            $this->$key = NULL;
-        }
-        
-        $this->resetInstance();
-        return $sth->rowCount() > 0;
+        // error.
+        $this->_errors = $res->errors;
+        return FALSE;
     }
     
     /**
-     * 条件に該当するレコードを全て削除します。
+     * delete record of specified id.
+     * Id must be set as a parameter or Id field.
      * 
-     * <pre>
-     * セットされているconstraints及びcriteriaに
-     * 該当するレコードを全て削除します。
-     * </pre>
-     * 
-     * @return int 削除件数
+     * @param string $id
+     * @return bool
      */
-    public function deleteAll()
+    public function delete($id = NULL)
     {
-        $this->_bindvalue = array();
-        
-        $sql = "DELETE FROM `". $this->_tablename ."` ".
-            $this->_buildWhereClause(false);
-        
-        $this->_log->info("deleteAll ". $this->_tablename .": $sql");
-        $this->_log->info("param is: \n". @var_export($this->_bindvalue, TRUE));
-        $sth = $this->_pdo->prepare($sql);
-        
-        if (! $sth) {
-            $err = $this->_pdo->errorInfo();
-            throw new TeepleActiveRecordException("pdo prepare failed: {$err[2]}:{$sql}");
+        if ($id == NULL) {
+            $id = $this->Id;
         }
-        if (! $sth->execute($this->_bindvalue)) {
-            $err = $sth->errorInfo();
-            throw new TeepleActiveRecordException("pdo execute failed: {$err[2]}:{$sql}");
+        if ($this->_null($id) == NULL) {
+            throw new SRecord_ActiveRecordException('Id is not specified.');
         }
         
-        $this->_log->info("deleteAll ". $this->_tablename .": result=(".$sth->rowCount().")");
+        // connect to salesforce.
+        $client = Srecord_Schema::getClient();
+        $res = $client->delete(array($id));
+        if ($res->success == 1) {
+            return TRUE;
+        }
         
-        $this->resetInstance();
-        return $sth->rowCount();
+        // error.
+        $this->_errors = $res->errors;
+        return FALSE;
     }
-    
-    /**
-     * 指定されたSELECT文を実行します。
-     * 結果はstdClassの配列になります。
-     * 結果が0行の場合は空の配列が返ります。
-     *
-     * @param string $query
-     * @param array $bindvalues
-     * @return array
-     */
-    public function selectQuery($query, $bindvalues) {
-        
-        // prepare
-        $sth = $this->getPDO()->prepare($query); 
-        
-        // bind
-        if (is_array($bindvalues) && count($bindvalues) > 0) {
-            foreach($bindvalues as $i => $value) {
-                $sth->bindValue($i+1, $value);
-            }
-        }
-        
-        // 実行
-        $sth->execute();
-        
-        // 結果を取得
-        $result = array();
-        while ($row = $sth->fetch()) {
-            $obj = new stdClass;
-            foreach($row as $col => $value) {
-                $obj->$col = $value;
-            }
-            array_push($result, $obj);
-        }
-        return $result;
-    }
-    
-    /**
-     * 指定されたSELECT文を実行します。(単一行)
-     * 結果はstdClassになります。
-     * 結果が0行の場合はNULLが返ります。
-     *
-     * @param string $query
-     * @param array $bindvalues
-     * @return stdClass
-     */
-    public function findQuery($query, $bindValues) {
-        
-        $result = $this->selectQuery($query, $bindValues);
-        if (count($result) > 0) {
-            return $result[0];
-        }
-        return NULL;
-    }    
     
     /**
      * reset metadata of this instance.
      */
-    public function resetInstance() {
+    public function resetInstance()
+    {
         $this->_parents = array();
         $this->_children = array();
         $this->_criteria = array();
@@ -912,15 +823,18 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * ActionクラスのプロパティからEntityのプロパティを生成します。
+     * copy object property value to this instance.
      *
-     * @param Object $obj Actionクラスのインスタンス
-     * @param array $colmap 'entityのカラム名' => 'Actionのプロパティ名' の配列
+     * @param mixed $obj object or array (fieldName => value)
+     * @param array $colmap mapping of ('field name of this instance' => 'field name of $obj')
      */
-    public function convert2Entity($obj, $colmap=null) {
-        
+    public function copyToThis($obj, $colmap=null)
+    {
         if ($colmap == null) {
             $colmap = array();
+        }
+        if (is_array($obj)) {
+            $obj = (object)$obj;
         }
         
         $columns = $this->_getColumns(get_class($this));
@@ -934,13 +848,13 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * EntityのプロパティからActionクラスのプロパティを生成します。
+     * copy object property value of this instance to obj.
      *
-     * @param Object $obj Actionクラスのインスタンス
-     * @param array $colmap 'entityのカラム名' => 'Actionのプロパティ名' の配列
+     * @param Object $obj
+     * @param array $colmap mapping of ('field name of this instance' => 'field name of $obj')
      */
-    public function convert2Page($obj, $colmap=null) {
-
+    public function copyFromThis($obj, $colmap=null)
+    {
         if ($colmap == null) {
             $colmap = array();
         }
@@ -1114,25 +1028,11 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * UPDATE文のVALUES部分を作成します。
-     *
-     * @param array $array アップデートする値の配列 
-     * @return string SQL句の文字列
-     */
-    protected function _buildSetClause($array) {
-        foreach($array as $key => $value) {
-            $expressions[] ="{$key} = ?";
-            array_push($this->_bindvalue, $value);
-        }
-        return "SET ". implode(', ', $expressions);
-    }
-    
-    /**
      * set record value.
      * @param SObject $row
      */
-    protected function _buildResultSet($row) {
-        
+    protected function _buildResultSet($row)
+    {
         $parentNames = array();
         foreach ($this->_parents as $name => $val) {
             if (strpos($name, '.') === FALSE) {
@@ -1193,74 +1093,6 @@ class Srecord_ActiveRecord
         $ref->setStaticPropertyValue($property, $value);
     }
 
-    /**
-     * 設定された制約でWHERE句を作成します。
-     *
-     * @param array $array 制約値
-     * @return string SQL句の文字列
-     */
-    protected function _makeUpdateConstraints($array) {
-        foreach($array as $key => $value) {
-            if(is_null($value)) {
-                $expressions[] = "{$key} IS NULL";
-            } else {
-                $expressions[] = "{$key}=:{$key}";
-            }
-        }
-        return implode(' AND ', $expressions);
-    }
-
-    /**
-     * バインドするパラメータの配列を作成します。
-     *
-     * @param array $array バインドする値の配列
-     * @return array バインドパラメータを名前にした配列
-     */
-    protected function _makeBindingParams( $array )
-    {
-        $params = array();
-        foreach( $array as $key=>$value )
-        {
-            $params[":{$key}"] = $value;
-        }
-        return $params;
-    }
-
-    /**
-     * IN句に設定するIDのリストを作成します。
-     * 
-     * @param array $array IDの配列
-     * @return string IN句に設定する文字列
-     */
-    protected function _makeIDList( $array )
-    {
-        $expressions = array();
-        foreach ($array as $id) {
-            $expressions[] = "`". $this->_tablename ."`.id=".
-                $this->_pdo->quote($id, isset($this->has_string_id) ? PDO::PARAM_INT : PDO::PARAM_STR);
-        }
-        return '('.implode(' OR ', $expressions).')';
-    }
-    
-    /**
-     * PKがセットされているかどうかをチェックします。
-     * 
-     * @return PKがセットされている場合はTRUE
-     */
-    protected function isSetPk()
-    {
-        if (! isset($this->_pk)) {
-            return isset($this->id);
-        }
-        
-        foreach ($this->_pk as $one) {
-            if (! isset($this->$one)) {
-                return false;
-            }
-        }
-        return true;
-    }
-    
     /**
      * Entityのカラム値をArrayとして取り出す
      *
@@ -1424,7 +1256,7 @@ class Srecord_ActiveRecord
 class SRecord_ActiveRecordException extends Exception
 {
     /**
-     * コンストラクタです。
+     * constructor
      * @param string $message
      */
     function __construct($message)

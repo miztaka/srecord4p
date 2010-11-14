@@ -56,7 +56,7 @@ class ActiveRecordUpdateTest extends UnitTestCase {
         $this->assertTrue($result);
         $this->assertNotNull($j->Id);
         
-        $j2 = Sobject_Jyugyoin__c::get()->eq('Id', $j->Id)->find();
+        $j2 = Sobject_Jyugyoin__c::neu()->eq('Id', $j->Id)->find();
         $j2->Name = "Cathy";
         $j2->Age__c = "";
         $result = $j2->updateEntity();
@@ -66,7 +66,7 @@ class ActiveRecordUpdateTest extends UnitTestCase {
             return;
         }
         
-        $j3 = Sobject_Jyugyoin__c::get()->eq('Id', $j->Id)->find();
+        $j3 = Sobject_Jyugyoin__c::neu()->eq('Id', $j->Id)->find();
         $this->assertEqual($j3->Age__c, "");
         $this->assertEqual($j3->Name, "Cathy");
     }

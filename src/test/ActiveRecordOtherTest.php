@@ -21,6 +21,32 @@ class ActiveRecordOtherTest extends UnitTestCase {
         
     }
     
+    public function testCopyToThis() {
+        
+        $value = array(
+            'Name' => 'Sato',
+            'Id' => '11111111111',
+            'JyugyoinBango__c' => '12345'
+        );
+        
+        $j = new Sobject_Jyugyoin__c();
+        $j->copyToThis($value);
+        
+        $this->assertEqual($j->Name, $value['Name']);
+        $this->assertEqual($j->Id, $value['Id']);
+        $this->assertEqual($j->JyugyoinBango__c, $value['JyugyoinBango__c']);
+        
+    }
+    
+    public function testCopyFromThis() {
+        
+        $account = Sobject_Account::neu()->eq("Id", "0018000000UoDxpAAF")->find();
+        $obj = new stdClass();
+        $account->copyFromThis($obj);
+        
+        $this->assertEqual($obj->Name, $account->Name);
+    }
+    
 }
 
 ?>
