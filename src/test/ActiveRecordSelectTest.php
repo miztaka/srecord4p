@@ -151,7 +151,7 @@ $expected = "SELECT Account.Id, Account.Name, (SELECT Id, reason FROM Cases WHER
     
     public function testFind() {
         $account = new Sobject_Account();
-        $account = $account->eq('Id', '0018000000UoDxpAAF')->find();
+        $account = $account->find('0018000000UoDxpAAF');
         $this->assertEqual($account->Name, 'GenePoint');
         try {
             $account = $account->starts('Name', 'G')->find();
@@ -175,9 +175,29 @@ $expected = "SELECT Account.Id, Account.Name, (SELECT Id, reason FROM Cases WHER
        $this->assertEqual(count($result), 6);
     }
     
+    public function testEscape() {
+        
+        $result = Sobject_Account::neu()
+            ->eq('Name', "O'reilly")
+            ->find();
+        $this->assertNull($result);
+    
+        $result = Sobject_Account::neu()
+            ->eq('Name', "Orei\\lly")
+            ->find();
+        $this->assertNull($result);
+    
+        $result = Sobject_Account::neu()
+            ->eq('Name', 'O"reilly')
+            ->find();
+        $this->assertNull($result);
+    }
+    
     public function testLimitOffset() {
         
     }
+    
+    
     
 }
 
