@@ -1,50 +1,17 @@
 <?php
 /**
- * Teeple2 - PHP5 Web Application Framework inspired by Seasar2
+ * sRecord - PHP5 Library for Salesforce SObject like active record.
  *
- * PHP versions 5
- *
- * LICENSE: This source file is subject to version 3.0 of the PHP license
- * that is available through the world-wide-web at the following URI:
- * http://www.php.net/license/3_0.txt.  If you did not receive a copy of
- * the PHP License and are unable to obtain it through the web, please
- * send a note to license@php.net so we can mail you a copy immediately.
- *
- * @package     teeple
+ * @package     sRecord
  * @author      Mitsutaka Sato <miztaka@gmail.com>
- * @license     http://www.php.net/license/3_0.txt  PHP License 3.0
- */
-
-/**
- * ActiveRecordクラスです。
- * 
- * <pre>
- * [Entityクラスの作成]
- * このクラスを継承して各テーブルのレコードを表すクラスを作成します。
- * ファイルの配置場所は、ENTITY_DIR で定義されたディレクトリです。
- * ファイル名は、`table名`.class.php, クラス名は Entity_`table名` とします。
- * 
- * 各テーブルの以下のプロパティを定義する必要があります。
- *   // 使用するデータソース名(Teepleフレームワークを使用しない場合は不要。)
- * 　public static $_DATASOURCE = "";
- *   // テーブル名称
- *   public static $_TABLENAME = "";
- *   // プライマリキーのカラム名(配列)
- *   public static $_PK = array();
- *   // プライマリキー以外のカラム名(配列)
- *   public static $_COLUMNS = array();
- *   // PKが単一で、AUTOINCREMENT等の場合にTRUEをセット
- *   // ※シーケンスには対応できていません。
- *   public static $_AUTO = TRUE;
- *   // joinするテーブルの定義
- *   public static $_JOINCONFIG = array();
- * </pre>
- * 
- * @package teeple
- * 
+ * @license     Apache License, Version 2.0 http://www.apache.org/licenses/LICENSE-2.0
  */
 class Srecord_ActiveRecord
 {
+    const STATE_SUCCESS = 1;
+    const STATE_FAIL    = 2;
+    const STATE_NOTEXECUTED = 3;
+    
     /**
      * name of sobject
      * must be overrided by subclass
@@ -74,6 +41,7 @@ class Srecord_ActiveRecord
     protected $_afterwhere = array();
     protected $_selectColumns = array();
     protected $_fieldsToNull = array();
+    protected $_state = self::STATE_NOTEXECUTED;
     
     /**
      * constructor
@@ -109,7 +77,7 @@ class Srecord_ActiveRecord
     }
 
     /**
-     * set dryrun flag.
+     * set/get dryrun flag.
      * @param boolean $bool
      * @return boolean
      */
@@ -121,18 +89,27 @@ class Srecord_ActiveRecord
         return $this->_dryrun;
     }
     protected $_dryrun = FALSE;
-
+    
     /**
-     * return new Instance of this SObjects
-     * @return Srecord_ActiveRecord
+     * check if the field is updateable
+     * @param string $f
+     * @return bool
      */
-    public function newInstance()
+    public  function isUpdateableField($f)
     {
-        $class_name = get_class($this);
-        $obj = new $class_name();
-        return $obj;
+        return $this->getMeta()->fields[$f]->updateable == 1;
     }
     
+    /**
+     * check if the field is createable
+     * @param string $f
+     * @return bool
+     */
+    protected function isCreateableField($f)
+    {
+        return $this->getMeta()->fields[$f]->createable == 1;
+    }
+
     /**
      * set child-parent relationship
      * @param string $name relationship name
@@ -163,7 +140,6 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * TODO child filter
      * set parent-child relationship
      * @param string $name relationship name
      * @param string $columns columns to select.(if null, all columns is selected.)
@@ -574,7 +550,7 @@ class Srecord_ActiveRecord
         // connect to salesforce
         $client = Srecord_Schema::getClient();
         $res = $client->query($sql);
-        $ltem_list = array();
+        $item_list = array();
         foreach ($res->records as $row) {
             $item = clone($this);
             $item->_buildResultSet($row);
@@ -590,12 +566,19 @@ class Srecord_ActiveRecord
      * get one object.
      * if too many rows are selected, throw exception.
      *
+     * @param $id string Id value to select. set null if you don't use Id for query.
      * @param $columns string columns to select. concats with comma (ex. 'Name,Age,Address')
      * @return Srecord_ActiveRecord
      */
-    public function find($columns=NULL) {
-        
+    public function find($id=NULL, $columns=NULL)
+    {
+        if ($id != NULL) {
+            $this->eq('Id', $id, FALSE);
+        }
         $result = $this->select($columns);
+        if ($this->dryrun()) {
+            return $result;
+        }
         if (count($result) > 1) {
             throw new Srecord_ActiveRecordException('too many rows.');
         }
@@ -613,7 +596,6 @@ class Srecord_ActiveRecord
     public function count()
     {
         $this->_bindvalue = array();
-        
         $select_str = "SELECT count()";
         $from_str = $this->_buildFromClause();
         $where_str = $this->_buildWhereClause();
@@ -645,6 +627,11 @@ class Srecord_ActiveRecord
         }
 
         $so = $this->_convert2SObject();
+        foreach ($so->fields as $n => $v) {
+            if (! $this->isCreateableField($n)) {
+                unset($so->fields[$n]);
+            }
+        }
         if ($this->dryrun()) {
             return $so;
         }
@@ -654,11 +641,14 @@ class Srecord_ActiveRecord
         $res = $client->create(array($so));
         if ($res->success) {
             $this->Id = $res->id;
+            $this->_state = self::STATE_SUCCESS;
+            $this->_errors = NULL;
             return TRUE;
         }
         
         // error.
         $this->_errors = $res->errors;
+        $this->_state = self::STATE_FAIL;
         return FALSE;
     }
     
@@ -672,8 +662,9 @@ class Srecord_ActiveRecord
             $fields = explode(',', $fields);
         }
         foreach ($fields as $f) {
-            if ($this->isUpdatableField($f)) {
-                $this->_fieldsToNull[] = trim($f);
+            $f = trim($f);
+            if ($this->isUpdateableField($f)) {
+                $this->_fieldsToNull[] = $f;
             }
         }
         return $this;
@@ -681,6 +672,7 @@ class Srecord_ActiveRecord
     
     /**
      * update record by id.
+     * if you want to update multiple records, use Srecord_Schema::updateAll() instead.
      * empty fields are ignored.
      * set $fieldsToNull if you want set NULL to some fields.
      *
@@ -699,7 +691,7 @@ class Srecord_ActiveRecord
         
         if (is_array($fieldsToNull)) {
             foreach ($fieldsToNull as $one) {
-                if ($this->isUpdatableField($one)) {
+                if ($this->isUpdateableField($one)) {
                     $this->_fieldsToNull[] = $one;
                 }
             }
@@ -710,20 +702,26 @@ class Srecord_ActiveRecord
             $so->fieldsToNull = array_unique($this->_fieldsToNull);
         }
         foreach ($so->fields as $n => $v) {
-            if (! $this->isUpdatableField($n)) {
+            if (! $this->isUpdateableField($n)) {
                 unset($so->fields[$n]);
             }
+        }
+        if ($this->dryrun()) {
+            return $so;
         }
         
         // connect to salesforce.
         $client = Srecord_Schema::getClient();
         $res = $client->update(array($so));
         if ($res->success == 1) {
+            $this->_state = self::STATE_SUCCESS;
+            $this->_errors = NULL;
             return TRUE;
         }
         
         // error.
         $this->_errors = $res->errors;
+        $this->_state = self::STATE_FAIL;
         return FALSE;
     }
     
@@ -737,7 +735,7 @@ class Srecord_ActiveRecord
     public function updateEntity()
     {
         foreach ($this->_getColumns(get_class($this)) as $col) {
-            if ($this->_null($this->$col) === NULL && $this->isUpdatableField($col)) {
+            if ($this->_null($this->$col) === NULL && $this->isUpdateableField($col)) {
                 $this->_fieldsToNull[] = $col;
             }
         }
@@ -763,6 +761,9 @@ class Srecord_ActiveRecord
         if (count($this->_fieldsToNull) > 0) {
             $so->fieldsToNull = array_unique($this->_fieldsToNull);
         }
+        if ($this->dryrun()) {
+            return $so;
+        }
         
         // connect to salesforce.
         $client = Srecord_Schema::getClient();
@@ -771,17 +772,21 @@ class Srecord_ActiveRecord
             if (isset($res->id)) {
                 $this->Id = $res->id;
             }
+            $this->_state = self::STATE_SUCCESS;
+            $this->_errors = NULL;
             return TRUE;
         }
         
         // error.
         $this->_errors = $res->errors;
+        $this->_state = self::STATE_FAIL;
         return FALSE;
     }
     
     /**
      * delete record of specified id.
      * Id must be set as a parameter or Id field.
+     * if you want to delete multiple records, use Srecord_Schema::deleteAll() instead.
      * 
      * @param string $id
      * @return bool
@@ -799,10 +804,13 @@ class Srecord_ActiveRecord
         $client = Srecord_Schema::getClient();
         $res = $client->delete(array($id));
         if ($res->success == 1) {
+            $this->_state = self::STATE_SUCCESS;
+            $this->_errors = NULL;
             return TRUE;
         }
         
         // error.
+        $this->_state = self::STATE_FAIL;
         $this->_errors = $res->errors;
         return FALSE;
     }
@@ -819,6 +827,8 @@ class Srecord_ActiveRecord
         $this->_afterwhere = array();
         $this->_selectColumns = array();
         $this->_fieldsToNull = array();
+        $this->_errors = NULL;
+        $this->_state = self::STATE_NOTEXECUTED;
         return;
     }
     
@@ -870,25 +880,25 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * 現在の時刻を返します。
+     * get xsd:datetime expression for now
      * @return string 
      */
-    public function now() {
-        return date('Y-m-d H:i:s');
+    public function now()
+    {
+        return date("c");
     }
     
     /**
-     * SELECT文を構築します。
+     * build select query
      *
-     * @return String SELECT文
+     * @return String
      */
-    protected function _buildSelectSql() {
-        
+    protected function _buildSelectSql()
+    {
         $select_str = $this->_buildSelectClause();
         $from_str = $this->_buildFromClause();
         $where_str = $this->_buildWhereClause();
         $other_str = $this->_buildAfterWhereClause();
-        
         return implode(" ", array($select_str, $from_str, $where_str, $other_str));
     }
     
@@ -897,8 +907,8 @@ class Srecord_ActiveRecord
      *
      * @return String SELECT clause
      */
-    protected function _buildSelectClause() {
-        
+    protected function _buildSelectClause()
+    {
         $buff = array();
         $base = $this->__soname;
         
@@ -940,8 +950,8 @@ class Srecord_ActiveRecord
      * build from clause.
      * @return string
      */
-    protected function _buildFromClause() {
-        
+    protected function _buildFromClause()
+    {
         $base = $this->__soname;
         return "FROM {$base}";
     }
@@ -950,10 +960,9 @@ class Srecord_ActiveRecord
      * build where clause.
      * @return string
      */
-    protected function _buildWhereClause() {
-        
+    protected function _buildWhereClause()
+    {
         $buff = array();
-        
         // criteria
         if (count($this->_criteria)) {
             foreach($this->_criteria as $cri) {
@@ -977,37 +986,11 @@ class Srecord_ActiveRecord
     }
 
     /**
-     * WHERE clause を構築します。
-     *
-     * @return unknown
-     */
-    protected function _buildConstraintClause($usebase=true) {
-        
-        $buff = array();
-        
-        // constraints
-        if (count($this->_constraints)) {
-            foreach($this->_constraints as $col => $val) {
-                if ($val != null) {
-                    $buff[] = $usebase ? "base.{$col} = ?" : "{$col} = ?";
-                    array_push($this->_bindvalue, $val);
-                } else {
-                    $buff[] = $usebase ? "base.{$col} IS NULL" : "{$col} IS NULL";
-                }
-            }
-        }
-        if (count($buff)) {
-            return "WHERE ". implode(' AND ', $buff);
-        }
-        return "";
-    }    
-    
-    /**
      * build order by, limit, offset clause
      * @return string
      */
-    protected function _buildAfterWhereClause() {
-        
+    protected function _buildAfterWhereClause()
+    {
         $buff = array();
         if (count($this->_afterwhere)) {
             if (isset($this->_afterwhere['order'])) {
@@ -1072,21 +1055,40 @@ class Srecord_ActiveRecord
         return;
     }
     
-    protected function _checkPlaceHolder($condition, $params) {
-        
+    /**
+     * check occurence of placeholder.
+     * 
+     * @param string $condition
+     * @param array $params
+     */
+    protected function _checkPlaceHolder($condition, $params)
+    {
         $param_num = count($params);
         $holder_num = substr_count($condition, '?');
         if ($param_num != $holder_num) {
-            throw new TeepleActiveRecordException("The num of placeholder is wrong.");
+            throw new Srecord_ActiveRecordException("The num of placeholder is wrong.");
         }
+        return;
     }
     
+    /**
+     * get static property value
+     * @param string $clsname
+     * @param string $property
+     * @return mixed
+     */
     protected function _getEntityConfig($clsname, $property)
     {
         $ref = new ReflectionClass($clsname);
         return $ref->getStaticPropertyValue($property);
     }
     
+    /**
+     * set value to static property. 
+     * @param string $clsname
+     * @param string $property
+     * @param mixed $value
+     */
     protected function _setEntityConfig($clsname, $property, $value)
     {
         $ref = new ReflectionClass($clsname);
@@ -1094,14 +1096,14 @@ class Srecord_ActiveRecord
     }
 
     /**
-     * Entityのカラム値をArrayとして取り出す
+     * get field value map.
      *
-     * @param Teeple_ActiveRecord $obj
-     * @param boolean $excludeNull
+     * @param Srecord_ActiveRecord $obj
+     * @param bool $excludeNull
      * @return array
      */
-    protected function _convertObject2Array($obj, $excludeNull=false) {
-        
+    protected function _convertObject2Array($obj, $excludeNull=false)
+    {
         $columns = $this->_getColumns(get_class($obj));
         $result = array();
         foreach ($columns as $name) {
@@ -1112,11 +1114,16 @@ class Srecord_ActiveRecord
                 $result[$name] = $this->_null($val);
             }
         }
-
         return $result;
     }
-    
-    protected function _convert2SObject($excludeNull=TRUE, $obj=NULL) {
+
+    /**
+     * convert Srecord_ActiveRecord to SObject
+     * @param bool $excludeNull
+     * @param Srecord_ActiveRecord $obj
+     */
+    protected function _convert2SObject($excludeNull=TRUE, $obj=NULL)
+    {
         if ($obj == NULL) {
             $obj = $this;
         }
@@ -1137,12 +1144,12 @@ class Srecord_ActiveRecord
      * @param string $clsname
      * @return array
      */ 
-    protected function _getColumns($clsname) {
-        
+    protected function _getColumns($clsname)
+    {
         $parentConfig = $this->_getEntityConfig($clsname, "_parentRelationships");
-        $parentNames = array_keys($parentConfig);
+        $parentNames = is_array($parentConfig) ? array_keys($parentConfig) : array();
         $childConfig = $this->_getEntityConfig($clsname, "_childRelationships");
-        $childNames = array_keys($childConfig);
+        $childNames = is_array($childConfig) ? array_keys($childConfig) : array();
         
         $result = array();
         $vars = get_class_vars($clsname);
@@ -1157,11 +1164,16 @@ class Srecord_ActiveRecord
             }
             array_push($result, $name);
         }
-        
         return $result;
     }
 
-    protected function _null($str) {
+    /**
+     * if $str is empty, returns NULL.
+     * @param mixed $str
+     * @return mixed
+     */
+    protected function _null($str)
+    {
         return $str !== NULL && strlen($str) > 0 ? $str : NULL;
     }
 
@@ -1169,8 +1181,8 @@ class Srecord_ActiveRecord
      * @param string $name
      * @param array $def
      */
-    protected function _buildChildSelectClause($name, $def) {
-        
+    protected function _buildChildSelectClause($name, $def)
+    {
         $objname = $def['name'];
         $filter = $def['filter'];
         $columns = $this->getSelectColumnsAsArray($name);
@@ -1186,20 +1198,27 @@ class Srecord_ActiveRecord
     }
     
     /**
-     * TODO escape special character.
-     * @param unknown_type $query
-     * @param unknown_type $values
+     * set value to placeholder
+     * @param string $query
+     * @param array $values
+     * @return string
      */
-    protected function _placeValue($query, $values) {
-        
+    protected function _placeValue($query, $values)
+    {
         foreach ($values as $v) {
-            $query = preg_replace('/\?/', "'{$v}'", $query, 1);
+            $escaped = addslashes($v);
+            $part = explode('?',$query, 2);
+            $query = $part[0]."'".$escaped."'".$part[1];
         }
         return $query;
     }
-    
-    protected function getSelectColumnsAsArray($name) {
-        
+
+    /**
+     * get select columns
+     * @param string $name RelationshipName
+     */
+    protected function getSelectColumnsAsArray($name)
+    {
         if (isset($this->_selectColumns[$name])) {
             $columns = explode(',', $this->_selectColumns[$name]);
             array_walk($columns, create_function('&$arr','$arr=trim($arr);'));
@@ -1207,9 +1226,13 @@ class Srecord_ActiveRecord
         }
         return NULL;
     }
-    
-    protected function getParentInstance($relname) {
-        
+
+    /**
+     * get parent instance.
+     * @param $relname
+     */
+    protected function getParentInstance($relname)
+    {
         $objname = $this->__parentRelationships[$relname];
         if (! $objname) {
             throw new SRecord_ActiveRecordException("cannot find parent relationship for $relname");
@@ -1227,24 +1250,18 @@ class Srecord_ActiveRecord
         return $obj; 
     }
     
-    protected function getChildInstance($relname) {
-        
+    /**
+     * get instance of child from relationship name.
+     * @param string $relname
+     */
+    protected function getChildInstance($relname)
+    {
         $objname = $this->__childRelationships[$relname];
         $objname = "Sobject_{$objname}";
         $obj = new $objname();
         return $obj;
     }
     
-    protected function isUpdatableField($f)
-    {
-        return $this->getMeta()->fields[$f]->updateable == 1;
-    }
-    
-    protected function isCreatableField($f)
-    {
-        return $this->getMeta()->fields[$f]->createable == 1;
-    }
-
 }
 
 /**

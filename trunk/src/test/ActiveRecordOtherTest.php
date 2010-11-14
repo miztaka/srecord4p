@@ -47,6 +47,15 @@ class ActiveRecordOtherTest extends UnitTestCase {
         $this->assertEqual($obj->Name, $account->Name);
     }
     
+    public function testEscape() {
+        
+        $account = new Sobject_Account();
+        $account->dryrun(TRUE);
+        
+        $result = $account->eq('Name', "Orei\\lly")->select();
+        print($result);
+    }
+    
 }
 
 ?>
