@@ -225,7 +225,7 @@ class {$classname} extends {$baseclassname}
      * get instance of entity
      * @return {$classname}
      */
-    public static function get() {
+    public static function neu() {
         \$obj = new {$classname}();
         return \$obj;
     }
