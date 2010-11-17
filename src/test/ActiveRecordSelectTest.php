@@ -193,6 +193,35 @@ $expected = "SELECT Account.Id, Account.Name, (SELECT Id, reason FROM Cases WHER
         $this->assertNull($result);
     }
     
+    public function testIncludesExcludes() {
+        
+        $srecord = new Sobject_Jyugyoin__c();
+        $srecord->dryrun(TRUE);
+        $result = $srecord->includes('skill__c', 'manager;sales')->select('Id');
+        $this->assertEqual(trim($result), "SELECT Jyugyoin__c.Id FROM Jyugyoin__c WHERE (skill__c includes('manager;sales'))");
+        
+        $result = Sobject_Jyugyoin__c::neu()
+            ->includes('skill__c', 'manager;sales')
+            ->select('Id');
+        $this->assertEqual(count($result), 0);
+        
+        $srecord = new Sobject_Jyugyoin__c();
+        $srecord->dryrun(TRUE);
+        $result = $srecord->includes('skill__c', 'manager;sales', 'programer')->select('Id');
+        $this->assertEqual(trim($result), "SELECT Jyugyoin__c.Id FROM Jyugyoin__c WHERE (skill__c includes('manager;sales','programer'))");
+        
+        $srecord = new Sobject_Jyugyoin__c();
+        $srecord->dryrun(TRUE);
+        $result = $srecord->includes('skill__c', array('manager;sales', 'programer'))->select('Id');
+        $this->assertEqual(trim($result), "SELECT Jyugyoin__c.Id FROM Jyugyoin__c WHERE (skill__c includes('manager;sales','programer'))");
+        
+        $result = Sobject_Jyugyoin__c::neu()
+            ->includes('skill__c', 'manager;sales', 'programer')
+            ->select('Id');
+        $this->assertEqual(count($result), 0);
+        
+    }
+    
     public function testLimitOffset() {
         
     }
