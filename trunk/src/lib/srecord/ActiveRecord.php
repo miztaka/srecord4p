@@ -244,6 +244,8 @@ class Srecord_ActiveRecord
             if (! $notnullonly) {
                 $this->where("{$property} = null");
             }
+        } elseif (is_bool($value)) {
+            $this->where($value ? "{$property} = TRUE" : "{$property} = FALSE");
         } else {
             $this->where("{$property} = ?", $value);
         }
@@ -268,6 +270,8 @@ class Srecord_ActiveRecord
             if (! $notnullonly) {
                 $this->where("{$property} != null");
             }
+        } elseif (is_bool($value)) {
+            $this->where($value ? "{$property} != TRUE" : "{$property} != FALSE");
         } else {
             $this->where("{$property} != ?", $value);
         }
@@ -485,6 +489,53 @@ class Srecord_ActiveRecord
         } else {
             $this->where("{$property} LIKE ?", '%'.$value.'%');
         }
+        return $this;
+    }
+    
+    /**
+     * set includes clause for multiple select.
+     * ex.) "$sobject->includes('cst__c', 'AAA;BBB', 'CCC')" for "cst__c includes ('AAA;BBB', 'CCC')" 
+     */
+    public function includes()
+    {
+        $args_ar = func_get_args();
+        return $this->_includesExcludes('includes', $args_ar);
+    }
+    
+    /**
+     * set excludes clause for multiple select.
+     * ex.) "$sobject->excludes('cst__c', 'AAA;BBB', 'CCC')" for "cst__c excludes ('AAA;BBB', 'CCC')" 
+     */
+    public function excludes()
+    {
+        $args_ar = func_get_args();
+        return $this->_includesExcludes('excludes', $args_ar);
+    }
+
+    /**
+     * execute includes / excludes
+     * @param string $str
+     * @param array $args_ar
+     */
+    protected function _includesExcludes($str, $args_ar)
+    {
+        if (! is_array($args_ar) || count($args_ar) < 2) {
+            throw new SRecord_ActiveRecordException("args too short.");
+        }
+        $property = array_shift($args_ar);
+        if (! strlen($property)) {
+            return $this;
+        }
+        
+        // check num of params.
+        if (@is_array($args_ar[0])) {
+            $args_ar = $args_ar[0];
+        }
+        array_walk($args_ar, create_function('&$arr','$arr=addslashes($arr);'));
+        $param = "('".implode("','", $args_ar)."')";
+        $where = "{$property} {$str}".$param;
+            
+        $this->_criteria[] = array('str' => $where, 'val' => array());
         return $this;
     }
     
@@ -1036,7 +1087,19 @@ class Srecord_ActiveRecord
                 continue;
             }
             // fields
-            $this->$n = $v;
+            switch ($this->getMeta()->fields[$n]->type) {
+                case 'boolean':
+                    if ($v == 'true') {
+                        $this->$n = TRUE;
+                    } elseif ($v == 'false') {
+                        $this->$n = FALSE;
+                    } else {
+                        $this->$n = NULL;
+                    }
+                    break;
+                default:
+                    $this->$n = $v;
+            }
         }
         
         // children
@@ -1110,8 +1173,8 @@ class Srecord_ActiveRecord
             $val = $obj->$name;
             if (@is_array($val)) {
                 $result[$name] = serialize($val);
-            } else if (! $excludeNull || ($val !== NULL && strlen($val) > 0)) {
-                $result[$name] = $this->_null($val);
+            } else if (! $excludeNull || $this->_null($val) !== NULL) {
+                $result[$name] = $this->_xsdvalue($val);
             }
         }
         return $result;
@@ -1174,6 +1237,9 @@ class Srecord_ActiveRecord
      */
     protected function _null($str)
     {
+        if (is_bool($str)) {
+            return $str;
+        }
         return $str !== NULL && strlen($str) > 0 ? $str : NULL;
     }
 
@@ -1260,6 +1326,14 @@ class Srecord_ActiveRecord
         $objname = "Sobject_{$objname}";
         $obj = new $objname();
         return $obj;
+    }
+    
+    protected function _xsdvalue($val)
+    {
+        if (is_bool($val)) {
+            return $val ? 'true' : 'false';
+        }
+        return $val;
     }
     
 }
