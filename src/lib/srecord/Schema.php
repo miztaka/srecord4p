@@ -15,11 +15,11 @@ class Srecord_Schema
      * connect to salesforce, get sforceClient
      * @return SforcePartnerClient
      */
-    public static function getClient() {
-        
+    public static function getClient()
+    {
         if (self::$_sForceClient == NULL) {
             
-            $sforceClient = new SforcePartnerClient(); // TODO タイプ指定できるように
+            $sforceClient = new SforcePartnerClient(); // TODO now only partner client supported. 
             $soapClient = $sforceClient->createConnection(self::$wsdlPartner);
             if (PHP_SAPI != 'cli') {
                 @session_start();
@@ -42,6 +42,108 @@ class Srecord_Schema
         return self::$_sForceClient; 
     }
     protected static $_sForceClient = NULL;
+    
+    /**
+     * create all sobjects
+     * @param array $sobjects array of Srecord_ActiveRecord
+     */
+    public static function createAll($records)
+    {
+        $sObjects = array();
+        foreach ($records as $obj) {
+            $dryrun = $obj->dryrun();
+            $obj->dryrun(TRUE);
+            $so = $obj->insert();
+            $sObjects[] = $so;
+            $obj->dryrun($dryrun);
+        }
+        
+        $client = self::getClient();
+        $results = $client->create($sObjects);
+        if (! is_array($results)) {
+            $results = array($results);
+        }
+        for($i=0; $i<count($results); $i++) {
+            if ($results[$i]->success == 1) {
+                $records[$i]->Id = $results[$i]->id;
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_SUCCESS);
+                $records[$i]->setErrors(NULL);
+            } else {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
+                $records[$i]->setErrors($results[$i]->errors);
+            }
+        }
+        return;
+    }
+    
+    /**
+     * update all sobjects
+     * @param array $sobjects array of Srecord_ActiveRecord
+     */
+    public static function updateAll($records)
+    {
+        $sObjects = array();
+        foreach ($records as $obj) {
+            $dryrun = $obj->dryrun();
+            $obj->dryrun(TRUE);
+            $so = $obj->update();
+            $sObjects[] = $so;
+            $obj->dryrun($dryrun);
+        }
+        
+        $client = self::getClient();
+        $results = $client->update($sObjects);
+        if (! is_array($results)) {
+            $results = array($results);
+        }
+        for($i=0; $i<count($results); $i++) {
+            if ($results[$i]->success == 1) {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_SUCCESS);
+                $records[$i]->setErrors(NULL);
+            } else {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
+                $records[$i]->setErrors($results[$i]->errors);
+            }
+        }
+        return;
+    }
+    
+    /**
+     * upsert all sobjects
+     * @param string $externalIDFieldName
+     * @param array $sobjects array of Srecord_ActiveRecord
+     */
+    public static function upsertAll($externalIDFieldName, $records)
+    {
+        $sObjects = array();
+        foreach ($records as $obj) {
+            $dryrun = $obj->dryrun();
+            $obj->dryrun(TRUE);
+            $so = $obj->upsert($externalIDFieldName);
+            $sObjects[] = $so;
+            $obj->dryrun($dryrun);
+        }
+        
+        $client = self::getClient();
+        $results = $client->upsert($externalIDFieldName, $sObjects);
+        if (! is_array($results)) {
+            $results = array($results);
+        }
+        for($i=0; $i<count($results); $i++) {
+            if ($results[$i]->success == 1) {
+                if (isset($results[$i]->id)) {
+                    $records[$i]->Id = $results[$i]->id;
+                }
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_SUCCESS);
+                $records[$i]->setErrors(NULL);
+            } else {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
+                $records[$i]->setErrors($results[$i]->errors);
+            }
+        }
+        return;
+    }
+    
 }
 
 ?>
