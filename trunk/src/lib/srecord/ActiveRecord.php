@@ -41,7 +41,6 @@ class Srecord_ActiveRecord
     protected $_afterwhere = array();
     protected $_selectColumns = array();
     protected $_fieldsToNull = array();
-    protected $_state = self::STATE_NOTEXECUTED;
     
     /**
      * constructor
@@ -53,12 +52,23 @@ class Srecord_ActiveRecord
         $this->__parentRelationships = $this->_getEntityConfig(get_class($this), '_parentRelationships');
         return;
     }
+
+    public function getState() {
+        return $this->_state;
+    }
+    public function setState($state) {
+        $this->_state = $state;
+    }
+    protected $_state = self::STATE_NOTEXECUTED;
     
     /**
      * get errors object of last insert, update..
      */
     public function getErrors() {
         return $this->_errors;
+    }
+    public function setErrors($errors) {
+        $this->_errors = $errors;
     }
     protected $_errors;
     
@@ -690,7 +700,7 @@ class Srecord_ActiveRecord
         // connect to salesforce.
         $client = Srecord_Schema::getClient();
         $res = $client->create(array($so));
-        if ($res->success) {
+        if ($res->success == 1) {
             $this->Id = $res->id;
             $this->_state = self::STATE_SUCCESS;
             $this->_errors = NULL;
@@ -737,7 +747,7 @@ class Srecord_ActiveRecord
         }
 
         if ($this->Id === NULL || ! strlen($this->Id)) {
-            throw new TeepleActiveRecordException("id not set.");
+            throw new Srecord_ActiveRecordException("id not set.");
         }
         
         if (is_array($fieldsToNull)) {
