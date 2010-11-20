@@ -143,6 +143,64 @@ class Srecord_Schema
         }
         return;
     }
+
+    /**
+     * delete all sobjects
+     * Id must be set.
+     * @param array $sobjects array of Srecord_ActiveRecord
+     */
+    public static function deleteAll($records)
+    {
+        $ids = array();
+        foreach ($records as $obj) {
+            $ids[] = $obj->Id;
+        }
+        
+        $client = self::getClient();
+        $results = $client->delete($ids);
+        if (! is_array($results)) {
+            $results = array($results);
+        }
+        for($i=0; $i<count($results); $i++) {
+            if ($results[$i]->success == 1) {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_SUCCESS);
+                $records[$i]->setErrors(NULL);
+            } else {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
+                $records[$i]->setErrors($results[$i]->errors);
+            }
+        }
+        return;
+    }
+
+    /**
+     * undelete all sobjects
+     * Id must be set.
+     * @param array $sobjects array of Srecord_ActiveRecord
+     */
+    public static function undeleteAll($records)
+    {
+        $ids = array();
+        foreach ($records as $obj) {
+            $ids[] = $obj->Id;
+        }
+        
+        $client = self::getClient();
+        $results = $client->undelete($ids);
+        if (! is_array($results)) {
+            $results = array($results);
+        }
+        for($i=0; $i<count($results); $i++) {
+            if ($results[$i]->success == 1) {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_SUCCESS);
+                $records[$i]->setErrors(NULL);
+            } else {
+                $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
+                $records[$i]->setErrors($results[$i]->errors);
+            }
+        }
+        return;
+    }
     
 }
 
