@@ -21,6 +21,9 @@ class ActiveRecordInsertTest extends UnitTestCase {
         
         $result = $j->delete();
         $this->assertTrue($result);
+        
+        $result = $j->undelete();
+        $this->assertTrue($result);
     }
     
 }

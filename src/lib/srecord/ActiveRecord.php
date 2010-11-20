@@ -875,6 +875,38 @@ class Srecord_ActiveRecord
         $this->_errors = $res->errors;
         return FALSE;
     }
+
+    /**
+     * undelete record of specified id.
+     * Id must be set as a parameter or Id field.
+     * if you want to undelete multiple records, use Srecord_Schema::undeleteAll() instead.
+     * 
+     * @param string $id
+     * @return bool
+     */
+    public function undelete($id = NULL)
+    {
+        if ($id == NULL) {
+            $id = $this->Id;
+        }
+        if ($this->_null($id) == NULL) {
+            throw new SRecord_ActiveRecordException('Id is not specified.');
+        }
+        
+        // connect to salesforce.
+        $client = Srecord_Schema::getClient();
+        $res = $client->undelete(array($id));
+        if ($res->success == 1) {
+            $this->_state = self::STATE_SUCCESS;
+            $this->_errors = NULL;
+            return TRUE;
+        }
+        
+        // error.
+        $this->_state = self::STATE_FAIL;
+        $this->_errors = $res->errors;
+        return FALSE;
+    }
     
     /**
      * reset metadata of this instance.
@@ -1097,7 +1129,11 @@ class Srecord_ActiveRecord
                 continue;
             }
             // fields
-            switch ($this->getMeta()->fields[$n]->type) {
+            $meta = $this->getMeta();
+            if (! isset($meta->fields[$n])) {
+                continue;
+            }
+            switch ($meta->fields[$n]->type) {
                 case 'boolean':
                     if ($v == 'true') {
                         $this->$n = TRUE;
