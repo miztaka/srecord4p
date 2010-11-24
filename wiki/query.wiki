@@ -1,0 +1,40 @@
+#summary Query Salesforce using SOQL
+
+= Introduction =
+
+sRecord uses "Method-chain" design pattern to execute query Salesforce.<br/>
+It's easy to understand, intuitive and very flexible.<br/>
+For example, if you want to execute SOQL like bellow,
+{{{
+SELECT Account.Name, FROM Account WHERE Name LIKE '%G%' AND Owner.Username = 'sato'
+}}}
+your code with sRecord is like this.
+{{{
+$records = Sobject_Account::neu()
+    ->contains('Name', 'G')
+    ->eq('Owner.Username', 'sato')
+    ->select('Name');
+}}}
+
+= sRecord method and SOQL =
+This is a reference of sRecord criteria method against SOQL expression.
+
+|| name || SOQL || sRecord method ||
+|| 
+
+
+
+
+
+
+
+
+Add your content here.
+
+
+= Details =
+
+Add your content here.  Format your content with:
+  * Text in *bold* or _italic_
+  * Headings, paragraphs, and lists
+  * Automatic links to other wiki pages
