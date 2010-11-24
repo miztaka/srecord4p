@@ -31,21 +31,13 @@ This is a reference of sRecord criteria method against SOQL expression.
 || || name like '%foo' || ends('name','foo') ||
 || || name like '%appl_%' || where("name like '%appl_%'") ||
 || includes, excludes || MSP1__c includes ('AAA;BBB', 'CCC') || includes('MSP1__c', 'AAA;BBB', 'CCC') or <br/> includes('MSP1__c', array('AAA;BBB','CCC')) ||
-|| Boolean || BooleanField = TRUE || eq('BooleanField', TRUE) ||
-|| || BooleanField  = FALSE || eq('BooleanField', FALSE) ||
-|| Null || SomeField = null || eq('SomeField', null) ||
-|| || SomeField != null || ne('SomeField', null) ||
+|| Boolean || !BooleanField = TRUE || eq('!BooleanField', TRUE) ||
+|| || !BooleanField  = FALSE || eq('!BooleanField', FALSE) ||
+|| Null || !SomeField = null || eq('!SomeField', null) ||
+|| || !SomeField != null || ne('!SomeField', null) ||
 || In || age in ('10','20','30') || in('age', '10','20','30') or <br> in('age',array('10','20','30) ||
 || Order || ORDER BY name, age || order('name, age') ||
+|| Limit || LIMIT 10 || limit(10) ||
+|| Offset || OFFSET 10 || offset(10) ||
 
-
-
-Add your content here.
-
-
-= Details =
-
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+== selected column ==
