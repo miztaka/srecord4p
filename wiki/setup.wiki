@@ -2,15 +2,15 @@
 
 = Introduction =
 
- # unzip archive
- # deploy partner wsdl file
- # edit config.php
- # generate entity class
- # now ready to use it !
+ # Unzip archive
+ # Deploy Partner WSDL file
+ # Edit config.php
+ # Generate entity class
+ # Now ready to use it !
 
 = Details =
 
-== unzip archive ==
+== Unzip archive ==
 Unzip archive somewhere.
 {{{
 $ unzip srecord-x.x.x.zip
@@ -18,12 +18,12 @@ $ ls srecord
 bin lib test
 }}}
 
-== deploy partner wsdl file ==
-Deploy partner wsdl file to the directory "lib/wsdl".<br/>
+== Deploy Partner WSDL file ==
+Deploy Partner WSDL file to the directory "lib/wsdl".<br/>
 To generate your WSDL, login to Salesforce and go to Setup -> App Setup -> Develop -> API. Right click "Generate Partner WSDL" and save it to your directory as "partner.wsdl".
 
-== edit config.php ==
-edit "lib/config.php" and set your username, password, securityToken, wsdlPath.
+== Edit config.php ==
+Edit "lib/config.php" and set your username, password, securityToken, wsdlPath.
 {{{
 Srecord_Schema::$username = 'salesforceusername';
 Srecord_Schema::$password = 'salesforcepassword';
@@ -31,7 +31,7 @@ Srecord_Schema::$securityToken = 'salesforcesecuritytoken';
 Srecord_Schema::$wsdlPartner = dirname(__FILE__)."/wsdl/partner.wsdl";
 }}}
 
-== generate entity class ==
+== Generate entity class ==
 To generate entity class, execute "bin/generator.php".
 {{{
 $ cd bin
@@ -40,7 +40,7 @@ $ php generator.php
 If success, SObject entity class was created in "lib/sobject" and "lib/sobjectdef".<br/>
 When Salesforce SObject definition has changed, just execute generator.php again to synchronize SObject definition.
 
-== now ready to use it ! ==
+== Now ready to use it ! ==
 Now you are ready to use SObject entity class.<br/>
 In your php file, you just have to include "lib/config.php".
 {{{
@@ -54,8 +54,6 @@ $account = new Sobject_Account(); // you can use generated entity class.
 
 ?>
 }}}
-
-
 
 
 
