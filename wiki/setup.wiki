@@ -1,13 +1,17 @@
 #summary setup sRecord.
 
-
-
 = Introduction =
 
-Add your content here.
-
+ # unzip archive
+ # place partner wsdl file
+ # edit config.php
+ # generate entity class
+ # now ready to use it !
 
 = Details =
+
+== unzip archive ==
+
 
 Add your content here.  Format your content with:
   * Text in *bold* or _italic_
