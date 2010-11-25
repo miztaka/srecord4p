@@ -43,10 +43,11 @@ SELECT Id, Name, (SELECT ID, reason FROM Cases WHERE reason = 'Feedback') FROM A
 }}}
 You can get child objects through relationship name.
 {{{
-foreach ($record->Cases as $case) {
+$account = Sobject_Account::neu()
+    ->child('Cases', 'Id, reason', 'reason = ?', 'Feedback')
+    ->find('xxxxxxxxxxxxxxxx');
+foreach ($account->Cases as $case) {
     echo ($case->reason);
 }
 }}}
-
-
 
