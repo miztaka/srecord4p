@@ -25,3 +25,12 @@ if ($a1->getState() === Srecord_ActiveRecord::STATE_SUCCESS) {
 }
 
 }}}
+
+Other methods like updateAll, upsertAll, deleteAll and undeleteAll is similar to this.
+
+= updateAll =
+{{{
+
+
+
+}}}
