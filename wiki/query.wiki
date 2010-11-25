@@ -40,4 +40,30 @@ This is a reference of sRecord criteria method against SOQL expression.
 || Limit || LIMIT 10 || limit(10) ||
 || Offset || OFFSET 10 || offset(10) ||
 
-== selected column ==
+= Selected column =
+if you want to specify selected columns, give parameter to select() method like bellow.
+{{{
+$records = Sobject_Account::neu()
+    ->contains('Name', 'G')
+    ->eq('Owner.Username', 'sato')
+    ->select('Id, Name');
+}}}
+if no parameter is given, all of columns are selected.
+
+= Query result =
+The return value of select() method is an array of srecord objects (Sobject_Account for example).
+
+= Query for single row =
+While select() is used to query for multiple rows, find() is used to query for single row.
+If multiple rows hit in the result of find(), find() throws Srecord_ActiveRecordException.<br/>
+
+Usage of find() is similar to select(), exept for paramters. find() can have to parameters, first is Id of SObjects, second is selected columns.
+{{{
+// example for specifing Id
+
+$account = Sobject_Account::neu()->find('xxxxxxxxxxxxxxxx'); // xxxxx is Id of Salesforce SObject.
+}}}
+
+
+
+
