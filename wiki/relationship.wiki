@@ -29,3 +29,24 @@ foreach ($records as $record) {
     echo ($record->Contact->Account->Name);
 }
 }}}
+
+= Parent-child relationship =
+child() method is used to specify parent-child relationship. For example,
+{{{
+$records = Sobject_Account::neu()
+    ->child('Cases', 'Id, reason', 'reason = ?', 'Feedback')
+    ->select('Id, Name');
+}}}
+generates SOQL like bellow.
+{{{
+SELECT Id, Name, (SELECT ID, reason FROM Cases WHERE reason = 'Feedback') FROM Account
+}}}
+You can get child objects through relationship name.
+{{{
+foreach ($record->Cases as $case) {
+    echo ($case->reason);
+}
+}}}
+
+
+
