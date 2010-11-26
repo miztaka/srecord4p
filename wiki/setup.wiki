@@ -20,7 +20,8 @@ bin lib test
 
 == Deploy Partner WSDL file ==
 Deploy Partner WSDL file to the directory "lib/wsdl".<br/>
-To generate your WSDL, login to Salesforce and go to Setup -> App Setup -> Develop -> API. Right click "Generate Partner WSDL" and save it to your directory as "partner.wsdl".
+To generate your WSDL, login to Salesforce and go to Setup -> App Setup -> Develop -> API.<br/>
+Right click "Generate Partner WSDL" and save it to your directory as "partner.wsdl".
 
 == Edit config.php ==
 Edit "lib/config.php" and set your username, password, securityToken, wsdlPath.
@@ -54,7 +55,5 @@ $account = new Sobject_Account(); // you can use generated entity class.
 
 ?>
 }}}
-
-
 
 
