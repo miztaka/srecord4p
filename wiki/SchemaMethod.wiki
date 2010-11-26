@@ -2,11 +2,11 @@
 
 = Introduction =
 
-While Srecord_ActiveRecord#create() method is used for creating single record, Srecord_Schema::createAll() method is used for creating multiple records at once.
+While !Srecord_ActiveRecord#create() method is used for creating single record, !Srecord_Schema::createAll() method is used for creating multiple records at once.
 
 = createAll =
 
-Srecord_Schema::createAll() creates all records with specified array of srecords.<br/>
+!Srecord_Schema::createAll() creates all records with specified array of srecords.<br/>
 You can check the result by using getState() method.
 {{{
 $a1 = new Sobject_Account();
