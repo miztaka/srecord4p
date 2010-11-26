@@ -7,7 +7,7 @@ While !Srecord_ActiveRecord#create() method is used for creating single record, 
 = createAll =
 
 !Srecord_Schema::createAll() creates all records with specified array of srecords.<br/>
-You can check the result by using getState() method.
+You can check the result of each object by using getState() method.
 {{{
 $a1 = new Sobject_Account();
 $a1->Name = 'Scott';
@@ -35,8 +35,51 @@ $records = Srecord_Account::neu()->eq('Type', 'Prospect')->select();
 foreach ($records as $record) {
     $record->Type = 'Other';
 }
-Srecord_Schema::updateAll($records);
+$successAll = Srecord_Schema::updateAll($records);
+if (! $successAll) {
+    // handle error
+}
 
 }}}
 
+= upsertAll =
+{{{
 
+$records = array();
+for ($i=0; $i<count($_POST['extid']); $i++) {
+    $extid = $_POST['extid'][$i];
+    $name = $_POST['name'][$i];
+    $account = new Sobject_Account();
+    $account->extid__c = $extid;
+    $account->Name = $name;
+    $records[] = $account;
+}
+
+$successAll = Srecord_Schema::upsertAll('extid__c', $records);
+if (! $successAll) {
+    // handle error
+}
+
+}}}
+
+= deleteAll = 
+{{{
+
+$records = Srecord_Account::neu()->eq('Type', 'Prospect')->select();
+$successAll = Srecord_Schema::deleteAll($records);
+if (! $successAll) {
+    // handle error
+}
+
+}}}
+
+= undeleteAll =
+{{{
+
+$records = Srecord_Account::neu()->eq('Type', 'Prospect')->select();
+$successAll = Srecord_Schema::undeleteAll($records);
+if (! $successAll) {
+    // handle error
+}
+
+}}}
