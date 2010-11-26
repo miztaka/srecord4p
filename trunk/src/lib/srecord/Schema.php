@@ -49,6 +49,7 @@ class Srecord_Schema
      */
     public static function createAll($records)
     {
+        $successAll = TRUE;
         $sObjects = array();
         foreach ($records as $obj) {
             $dryrun = $obj->dryrun();
@@ -71,9 +72,10 @@ class Srecord_Schema
             } else {
                 $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
                 $records[$i]->setErrors($results[$i]->errors);
+                $successAll = FALSE;
             }
         }
-        return;
+        return $successAll;
     }
     
     /**
@@ -82,6 +84,7 @@ class Srecord_Schema
      */
     public static function updateAll($records)
     {
+        $successAll = TRUE;
         $sObjects = array();
         foreach ($records as $obj) {
             $dryrun = $obj->dryrun();
@@ -103,9 +106,10 @@ class Srecord_Schema
             } else {
                 $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
                 $records[$i]->setErrors($results[$i]->errors);
+                $successAll = FALSE;
             }
         }
-        return;
+        return $successAll;
     }
     
     /**
@@ -115,6 +119,7 @@ class Srecord_Schema
      */
     public static function upsertAll($externalIDFieldName, $records)
     {
+        $successAll = TRUE;
         $sObjects = array();
         foreach ($records as $obj) {
             $dryrun = $obj->dryrun();
@@ -139,9 +144,10 @@ class Srecord_Schema
             } else {
                 $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
                 $records[$i]->setErrors($results[$i]->errors);
+                $successAll = FALSE;
             }
         }
-        return;
+        return $successAll;
     }
 
     /**
@@ -151,6 +157,7 @@ class Srecord_Schema
      */
     public static function deleteAll($records)
     {
+        $successAll = TRUE;
         $ids = array();
         foreach ($records as $obj) {
             $ids[] = $obj->Id;
@@ -168,9 +175,10 @@ class Srecord_Schema
             } else {
                 $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
                 $records[$i]->setErrors($results[$i]->errors);
+                $successAll = FALSE;
             }
         }
-        return;
+        return $successAll;
     }
 
     /**
@@ -180,6 +188,7 @@ class Srecord_Schema
      */
     public static function undeleteAll($records)
     {
+        $successAll = TRUE;
         $ids = array();
         foreach ($records as $obj) {
             $ids[] = $obj->Id;
@@ -197,9 +206,10 @@ class Srecord_Schema
             } else {
                 $records[$i]->setState(Srecord_ActiveRecord::STATE_FAIL);
                 $records[$i]->setErrors($results[$i]->errors);
+                $successAll = FALSE;
             }
         }
-        return;
+        return $successAll;
     }
     
 }
