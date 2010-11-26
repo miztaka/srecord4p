@@ -31,6 +31,12 @@ Other methods like updateAll, upsertAll, deleteAll and undeleteAll is similar to
 = updateAll =
 {{{
 
-
+$records = Srecord_Account::neu()->eq('Type', 'Prospect')->select();
+foreach ($records as $record) {
+    $record->Type = 'Other';
+}
+Srecord_Schema::updateAll($records);
 
 }}}
+
+
