@@ -19,7 +19,7 @@ $records = Sobject_Account::neu()
 = sRecord method and SOQL =
 This is a reference of sRecord criteria method against SOQL expression.
 
-|| function || SOQL || sRecord method ||
+|| *function* || *SOQL* || *sRecord method* ||
 || Equals || name = 'foo' || eq('name', 'foo') ||
 || Not equals || name != 'foo' || ne('name', 'foo') ||
 || Less than || age < '10' || lt('age', 10) ||
@@ -63,5 +63,3 @@ Usage of find() is similar to select(), exept for paramters. find() can have to 
 
 $account = Sobject_Account::neu()->find('xxxxxxxxxxxxxxxx'); // xxxxx is Id of Salesforce SObject.
 }}}
-
-
